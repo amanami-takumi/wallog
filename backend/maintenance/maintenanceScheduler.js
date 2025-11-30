@@ -207,9 +207,9 @@ export function startMaintenanceScheduler() {
   console.log('RSS generation scheduled for every 4 hours');
   
   // Discord通知の定期実行（毎日午前7時と午後6時）
-  const discordMorningJob = schedule.scheduleJob('0 7 * * *', executeDiscordAnnounce);
+  //const discordMorningJob = schedule.scheduleJob('0 7 * * *', executeDiscordAnnounce);
   //const discordEveningJob = schedule.scheduleJob('0 18 * * *', executeDiscordAnnounce);
-  console.log('Discord announcements scheduled for 9 AM and 6 PM daily');
+  //console.log('Discord announcements scheduled for 9 AM and 6 PM daily');
   
   // 初回実行（5秒後）
   setTimeout(executeMaintenanceJobs, 5000);

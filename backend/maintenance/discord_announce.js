@@ -60,7 +60,7 @@ const pool = new pg.Pool({
 
 // 接続テスト関数
 const testDatabaseConnection = async () => {
-  try {
+  try {wallog
     const client = await pool.connect();
     console.log('データベース接続成功');
     client.release();
@@ -468,35 +468,35 @@ const checkLatestBlogs = async () => {
 export const runDiscordAnnounce = async () => {
   
     // 短い待機時間を設けて、各処理を順番に実行
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    //await new Promise(resolve => setTimeout(resolve, 1000));
     
     // 期限が近いタスクの通知(12時間以内)
-    await notifyUrgentTasks();
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    //await notifyUrgentTasks();
+    //await new Promise(resolve => setTimeout(resolve, 1000));
     
     // 24時間以内のタスクリスト
-    await sendTasksList(24);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    //await sendTasksList(24);
+    //await new Promise(resolve => setTimeout(resolve, 1000));
     
     // 72時間以内のタスクリスト
-    await sendTasksList(72);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    //await sendTasksList(72);
+    //await new Promise(resolve => setTimeout(resolve, 1000));
     
     // 投稿の確認
-    await checkLatestPosts();
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    //await checkLatestPosts();
+    //await new Promise(resolve => setTimeout(resolve, 1000));
     
     // ブログの確認
-    await checkLatestBlogs();
+    //await checkLatestBlogs();
 
 
 };
 export const runDiscordWakeupAnnounce = async () => {
   try {
-    console.log('Discord通知処理を開始します...');
+    //console.log('Discord通知処理を開始します...');
     
     // Discord clientの初期化
-    await initializeDiscordClient();
+    //wdiscord_announce.jsait initializeDiscordClient();
     
     // データベース接続テスト
     const dbConnected = await testDatabaseConnection();
@@ -506,12 +506,12 @@ export const runDiscordWakeupAnnounce = async () => {
     }
     
     // リアクションウォッチャーのセットアップ
-    await setupReactionWatcher();
+    //await setupReactionWatcher();
     
     // 起動通知
-    await sendStartupNotification();
+    //await sendStartupNotification();
     
-    console.log('Discord通知処理が完了しました');
+    //console.log('Discord通知処理が完了しました');
   } catch (error) {
     console.error('Discord通知実行中にエラーが発生しました:', error);
   }

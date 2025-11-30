@@ -10,6 +10,7 @@ import ReactDOMServer from 'react-dom/server';
 import ReactDOM from 'react-dom/client';
 import NotificationComponent from '@/components/Notification';
 import { CodeBlock } from '@/components/CodeBlock';
+import { InlineCodeBlock } from '@/components/InlineCodeBlock';
 import { CodeBlockProvider } from '@/contexts/CodeBlockContext';
 
 interface BlogPost {
@@ -77,6 +78,13 @@ const processCodeBlocks = (htmlContent: string) => {
 
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = htmlContent;
+  const decodeHtmlEntities = (value: string) =>
+    value
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
 
   // 見出し要素にIDを付与
   const headings = tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
@@ -108,12 +116,7 @@ const processCodeBlocks = (htmlContent: string) => {
   
   codeBlocks.forEach((block) => {
     const language = block.className;
-    const decodedCode = block.innerHTML
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
+    const decodedCode = decodeHtmlEntities(block.innerHTML);
 
     const container = document.createElement('div');
     const containerId = `code-block-${Date.now()}-${blockCounter++}`;
@@ -127,6 +130,30 @@ const processCodeBlocks = (htmlContent: string) => {
     if (preElement?.parentElement) {
       preElement.parentElement.replaceChild(container, preElement);
     }
+  });
+
+  // インラインコード処理
+  const inlineCodes = tempDiv.querySelectorAll('code');
+  let inlineCounter = 0;
+
+  inlineCodes.forEach((codeElement) => {
+    if (codeElement.parentElement?.tagName.toLowerCase() === 'pre') {
+      return;
+    }
+
+    const language = codeElement.className;
+    const decodedCode = decodeHtmlEntities(codeElement.innerHTML);
+
+    const container = document.createElement('span');
+    const containerId = `inline-code-${Date.now()}-${inlineCounter++}`;
+    container.setAttribute('data-inline-code', 'true');
+    container.setAttribute('data-code-block-id', containerId);
+    container.setAttribute('data-code', decodedCode);
+    container.setAttribute('data-language', language);
+    container.className = 'inline-code-container';
+    container.style.display = 'inline';
+
+    codeElement.parentElement?.replaceChild(container, codeElement);
   });
 
   return tempDiv.innerHTML;
@@ -442,6 +469,28 @@ export default function BlogDetail() {
                 );
               }
             });
+            document.querySelectorAll('.inline-code-container').forEach((container) => {
+              const code = container.getAttribute('data-code') || '';
+              const language = container.getAttribute('data-language') || '';
+              const containerId = container.getAttribute('data-code-block-id');
+
+              if (!containerId) return;
+
+              if (container.childNodes.length === 0) {
+                let root = codeBlockRoots.get(containerId);
+                if (!root) {
+                  root = ReactDOM.createRoot(container);
+                  codeBlockRoots.set(containerId, root);
+                }
+
+                root.render(
+                  <InlineCodeBlock 
+                    language={language} 
+                    code={code} 
+                  />
+                );
+              }
+            });
           }, 100); // DOMの更新を待つため少し遅延
 
           return updatedBlog;
@@ -490,6 +539,27 @@ export default function BlogDetail() {
             </div>
           </div>
           <hr className="border-2 border-gray-200 dark:border-gray-700 mb-8" />
+          {toc.length > 0 && (
+            <div className="lg:hidden mb-8">
+              <h2 className="text-xl font-bold mb-4 dark:text-white">目次</h2>
+              <nav className="space-y-2">
+                {toc.map((item, index) => (
+                  <a
+                    key={index}
+                    href={`#${item.id}`}
+                    onClick={(e) => handleTocClick(e, item.id)}
+                    className={`
+                      block text-gray-600 dark:text-gray-400 hover:text-blue-500 
+                      transition-colors duration-200 cursor-pointer
+                      ${item.level === 1 ? 'ml-0' : `ml-${(item.level - 1) * 2}`}
+                    `}
+                  >
+                    {item.text}
+                  </a>
+                ))}
+              </nav>
+            </div>
+          )}
           <div className="prose dark:prose-invert max-w-none mb-20 w-full overflow-hidden">
             <div 
               dangerouslySetInnerHTML={{ __html: blog?.blog_pursed_text || '' }}
@@ -499,6 +569,8 @@ export default function BlogDetail() {
                 [&>h3]:text-2xl [&>h3]:font-bold [&>h3]:mt-4 [&>h3]:mb-3
                 [&>ol]:list-decimal [&>ol]:pl-10 [&>ol]:my-4
                 [&>ol>li]:my-2
+                [&>ul]:list-disc [&>ul]:pl-10 [&>ul]:my-4
+                [&>ul>li]:my-2
                 [&>p]:min-h-[1.3em] [&>p:empty]:block [&>p]:mb-1 [&>p]:leading-relaxed
                 [&>p:empty]:h-[1.3em]
                 [&>blockquote]:border-l-4 [&>blockquote]:border-gray-300 dark:[&>blockquote]:border-gray-700
@@ -577,4 +649,3 @@ export default function BlogDetail() {
     </CodeBlockProvider>
   );
 }
-

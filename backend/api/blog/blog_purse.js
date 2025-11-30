@@ -106,6 +106,7 @@ export function markdownToHtml(markdown) {
     let inCodeBlock = false;
     let codeContent = '';
     let inOrderedList = false;  // 番号付きリストの状態を追跡
+    let inUnorderedList = false;  // 箇条書きリストの状態を追跡
 
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i].trim();
@@ -158,6 +159,10 @@ export function markdownToHtml(markdown) {
                 html += '</ol>\n';
                 inOrderedList = false;
             }
+            if (inUnorderedList) {
+                html += '</ul>\n';
+                inUnorderedList = false;
+            }
             // iframeタグの場合はレスポンシブ対応を適用
             if (line.includes('<iframe')) {
                 html += `${makeIframeResponsive(line)}\n`;
@@ -174,6 +179,10 @@ export function markdownToHtml(markdown) {
                 html += '</ol>\n';
                 inOrderedList = false;
             }
+            if (inUnorderedList) {
+                html += '</ul>\n';
+                inUnorderedList = false;
+            }
             const [, level, content] = headingMatch;
             html += `<h${level}>${content}</h${level}>\n`;
             continue;
@@ -185,6 +194,10 @@ export function markdownToHtml(markdown) {
                 html += '</ol>\n';
                 inOrderedList = false;
             }
+            if (inUnorderedList) {
+                html += '</ul>\n';
+                inUnorderedList = false;
+            }
             const level = line.match(/^#+/)[0].length;
             const content = line.substring(level).trim();
             if (level >= 1 && level <= 6) {
@@ -195,6 +208,10 @@ export function markdownToHtml(markdown) {
 
         // 番号付きリストの処理
         if (/^\d+\.\s/.test(line)) {
+            if (inUnorderedList) {
+                html += '</ul>\n';
+                inUnorderedList = false;
+            }
             if (!inOrderedList) {
                 html += '<ol>\n';
                 inOrderedList = true;
@@ -211,8 +228,17 @@ export function markdownToHtml(markdown) {
 
         // リストの処理
         if (line.startsWith('- ')) {
+            if (!inUnorderedList) {
+                html += '<ul>\n';
+                inUnorderedList = true;
+            }
             html += `<li>${escapeHtml(line.substring(2))}</li>\n`;
             continue;
+        }
+
+        if (inUnorderedList) {
+            html += '</ul>\n';
+            inUnorderedList = false;
         }
 
         // 引用の処理
@@ -228,6 +254,13 @@ export function markdownToHtml(markdown) {
         }
 
         // インライン要素の処理を修正
+        const inlineCodePlaceholders = [];
+        line = line.replace(/`([^`]+)`/g, (match, code) => {
+            const placeholder = `@@INLINE_CODE_${inlineCodePlaceholders.length}@@`;
+            inlineCodePlaceholders.push(`<code>${escapeHtml(code)}</code>`);
+            return placeholder;
+        });
+
         line = line
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -238,6 +271,11 @@ export function markdownToHtml(markdown) {
                 return `<img src="https://wallog.seitendan.com/api/drive/file/${fileId}" alt="Image ${fileId}" class="max-w-full h-auto rounded-lg shadow-lg my-4" loading="lazy">`;
             });
 
+        inlineCodePlaceholders.forEach((codeHtml, index) => {
+            const placeholderRegex = new RegExp(`@@INLINE_CODE_${index}@@`, 'g');
+            line = line.replace(placeholderRegex, codeHtml);
+        });
+
         // 空行またはスペースのみの行も段落として処理
         html += `<p>${line}</p>\n`;
 
@@ -246,6 +284,9 @@ export function markdownToHtml(markdown) {
     // ファイル終端でまだリストが開いている場合は閉じる
     if (inOrderedList) {
         html += '</ol>\n';
+    }
+    if (inUnorderedList) {
+        html += '</ul>\n';
     }
 
     // ファイル終端でまだコードブロックが開いている場合は閉じる

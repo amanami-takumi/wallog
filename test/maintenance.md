@@ -1,8 +1,11 @@
 # Gitであれこれ
 git add . && git commit -m "
-'Dev 2025.04.18.0001'
-- Blogの一覧ページにおいて、ページネーションをクエリパラメータに反映するように
-- ブラウザバックで元のページに復帰できるように" && git push -u origin nextjs_test
+'Dev 2025.06.26.0000'
+- Todoに削除APIを実装
+- Todo&Doneページに削除機能を実装
+- 作成済みのTodoでカテゴリを設定しようとすると、新規作成のドロップダウンも表示されてしまう問題を修正
+- blogの個別ページに設定されていたPaddingを削除
+- エラーページに画像を使用するように修正" && git push -u origin nextjs_test
 # tar.gzの中身を見る
 tar ztf app.tar.gz
 
