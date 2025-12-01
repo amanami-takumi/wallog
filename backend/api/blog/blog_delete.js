@@ -5,6 +5,11 @@ import RedisStore from "connect-redis";
 import dotenv from "dotenv";
 import pkg from 'pg';
 const { Client } = pkg;
+import {
+  deleteBlogSchedule,
+  getBlogScheduleById,
+  parseScheduleDate,
+} from '../../component/blogScheduleRepository.js';
 
 const router = express.Router();
 const app = express();
@@ -96,7 +101,49 @@ router.post('/blog_delete', async (req, res) => {
       return res.status(401).json({ error: 'User not logged in' });
     }
 
-    const blogId = req.body.file_id;
+    const rawScheduleAt = req.body.blog_schedule_at;
+    const scheduleIdFromPayload = req.body.blog_schedule_id;
+    const fileId = req.body.file_id;
+    const looksLikeScheduleId =
+      typeof fileId === 'string' && /^\d{14}$/.test(fileId);
+
+    const hasScheduleIndicator =
+      (typeof rawScheduleAt !== 'undefined' &&
+        rawScheduleAt !== null &&
+        (`${rawScheduleAt}`).trim() !== '') ||
+      Boolean(scheduleIdFromPayload) ||
+      looksLikeScheduleId;
+
+    if (hasScheduleIndicator) {
+      if (
+        typeof rawScheduleAt !== 'undefined' &&
+        rawScheduleAt !== null &&
+        (`${rawScheduleAt}`).trim() !== ''
+      ) {
+        const parsedScheduleDate = parseScheduleDate(rawScheduleAt);
+        if (!parsedScheduleDate) {
+          return res.status(400).json({ error: 'blog_schedule_at が不正です' });
+        }
+      }
+
+      const scheduleId = scheduleIdFromPayload || fileId;
+      if (!scheduleId) {
+        return res.status(400).json({ error: 'blog_schedule_id が必要です' });
+      }
+
+      const existingSchedule = await getBlogScheduleById(scheduleId);
+      if (!existingSchedule) {
+        return res.status(404).json({ error: '予約投稿が見つかりません' });
+      }
+
+      const deletedSchedule = await deleteBlogSchedule(scheduleId);
+      return res.status(200).json({
+        message: '予約投稿を削除しました',
+        deleted_schedule: deletedSchedule,
+      });
+    }
+
+    const blogId = fileId;
     if (!blogId) {
       return res.status(400).json({ error: 'file_id is required' });
     }

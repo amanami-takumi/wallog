@@ -8,6 +8,11 @@ const router = express.Router();
 const app = express();
 import { markdownToHtml } from './blog_purse.js';
 import { extractDescriptionFromHtml } from './blog_helper.js';
+import {
+  getBlogScheduleById,
+  parseScheduleDate,
+  updateBlogSchedule,
+} from '../../component/blogScheduleRepository.js';
 
 // Redisクライアント作成
 const redis = new Redis({
@@ -131,6 +136,40 @@ router.put('/blog_update/:blogId', async (req, res) => {
     }
 
     console.log(`Session check successful: username = ${parsedSession.username}`);
+
+    const rawScheduleAt = req.body.blog_schedule_at;
+    const hasScheduleInput =
+      typeof rawScheduleAt !== 'undefined' &&
+      rawScheduleAt !== null &&
+      (`${rawScheduleAt}`).trim() !== '';
+
+    if (hasScheduleInput) {
+      const scheduleDate = parseScheduleDate(rawScheduleAt);
+      if (!scheduleDate) {
+        return res.status(400).json({ error: 'blog_schedule_at が不正です' });
+      }
+
+      const scheduleId = req.params.blogId;
+      const existing = await getBlogScheduleById(scheduleId);
+
+      if (!existing) {
+        return res.status(404).json({ error: '予約投稿が見つかりません' });
+      }
+
+      const updatedSchedule = await updateBlogSchedule(
+        scheduleId,
+        {
+          ...req.body,
+          blog_schedule_at: scheduleDate,
+        },
+        parsedSession.username
+      );
+
+      return res.status(200).json({
+        message: '予約投稿を更新しました',
+        blog_schedule: updatedSchedule,
+      });
+    }
 
     const blogId = req.params.blogId;
     const updatedBlog = await updateBlog(blogId, req.body, parsedSession.username);

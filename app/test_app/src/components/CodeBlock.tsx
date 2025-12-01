@@ -66,6 +66,9 @@ export function CodeBlock({ language, code, onCopy }: CodeBlockProps) {
           fontSize: '1rem',
           zIndex: 1
         }}
+        codeTagProps={{
+          style: { color: '#D4D4D4' }
+        }}
         PreTag="div"
       >
         {code}

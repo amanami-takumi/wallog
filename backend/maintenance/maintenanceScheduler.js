@@ -5,6 +5,8 @@ import { runMinioMaintenance } from '../setup/minio_maintenance.js';
 import { generateAndSaveSitemap } from '../setup/sitemap_generator.js';
 import { generateAndSaveRssFeeds } from '../setup/rss_generator.js';
 import { runDiscordAnnounce, runDiscordWakeupAnnounce } from './discord_announce.js';
+import { fetchDueBlogSchedules, deleteBlogSchedule } from '../component/blogScheduleRepository.js';
+import { publishBlogPost } from '../component/blogPublisher.js';
 
 /**
  * メンテナンス処理の重複実行を防ぐためのフラグ
@@ -14,6 +16,71 @@ let isMaintenanceRunning = false;
 let isSitemapGenerationRunning = false;
 let isRssGenerationRunning = false;
 let isDiscordAnnounceRunning = false;
+let isBlogScheduleProcessing = false;
+
+const resolveScheduleUsername = (schedule) => {
+  return (
+    schedule?.user_id ||
+    schedule?.blog_user_id ||
+    process.env.BLOG_DEFAULT_USER ||
+    process.env.DEFAULT_BLOG_USER ||
+    process.env.POST_DEFAULT_USER ||
+    null
+  );
+};
+
+const executeBlogSchedulePosting = async () => {
+  if (isBlogScheduleProcessing) {
+    console.log('Blog schedule processing already in progress, skipping...');
+    return;
+  }
+
+  isBlogScheduleProcessing = true;
+  console.log('Checking scheduled blogs...', new Date().toISOString());
+
+  try {
+    const dueSchedules = await fetchDueBlogSchedules(new Date());
+
+    for (const scheduleEntry of dueSchedules) {
+      const resolvedUserId = resolveScheduleUsername(scheduleEntry);
+      if (!resolvedUserId) {
+        console.error(
+          `予約投稿のユーザーが特定できませんでした: schedule_id=${scheduleEntry.blog_schedule_id}`
+        );
+        continue;
+      }
+      const authorId = scheduleEntry?.user_id || resolvedUserId;
+
+      try {
+        const { blog } = await publishBlogPost({
+          blogTitle: scheduleEntry.blog_title,
+          blogText: scheduleEntry.blog_text,
+          blogFile: scheduleEntry.blog_file,
+          blogTags: scheduleEntry.blog_tags,
+          blogThumbnail: scheduleEntry.blog_thumbnail,
+          blogFixedUrl: scheduleEntry.blog_fixedurl,
+          blogAttitude: scheduleEntry.blog_attitude || 1,
+          username: authorId,
+          userId: authorId,
+        });
+
+        await deleteBlogSchedule(scheduleEntry.blog_schedule_id);
+        console.log(
+          `予約投稿を公開しました: schedule_id=${scheduleEntry.blog_schedule_id}, blog_id=${blog.blog_id}`
+        );
+      } catch (error) {
+        console.error(
+          `予約投稿の処理中にエラーが発生しました: schedule_id=${scheduleEntry.blog_schedule_id}`,
+          error
+        );
+      }
+    }
+  } catch (error) {
+    console.error('予約投稿の取得中にエラーが発生しました:', error);
+  } finally {
+    isBlogScheduleProcessing = false;
+  }
+};
 
 /**
  * システムメンテナンスジョブを実行する非同期関数
@@ -205,6 +272,10 @@ export function startMaintenanceScheduler() {
   // RSS更新の定期実行（4時間ごと）
   const rssJob = schedule.scheduleJob('0 */4 * * *', executeRssGeneration);
   console.log('RSS generation scheduled for every 4 hours');
+
+  // ブログ予約投稿のチェック（毎分）
+  const blogScheduleJob = schedule.scheduleJob('* * * * *', executeBlogSchedulePosting);
+  console.log('Blog schedule processing scheduled for every minute');
   
   // Discord通知の定期実行（毎日午前7時と午後6時）
   //const discordMorningJob = schedule.scheduleJob('0 7 * * *', executeDiscordAnnounce);
@@ -219,6 +290,8 @@ export function startMaintenanceScheduler() {
   setTimeout(executeRssGeneration, 15000);
   // Discord通知も初回実行（20秒後）
   setTimeout(executeDiscordWakeupAnnounce, 20000);
+  // ブログ予約投稿の初回実行（25秒後）
+  setTimeout(executeBlogSchedulePosting, 25000);
 
   // エラーハンドリング
   process.on('uncaughtException', (err) => {

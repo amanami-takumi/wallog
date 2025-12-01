@@ -540,7 +540,7 @@ export default function BlogDetail() {
           </div>
           <hr className="border-2 border-gray-200 dark:border-gray-700 mb-8" />
           {toc.length > 0 && (
-            <div className="lg:hidden mb-8">
+            <div className="lg:hidden mb-8  py-4 px-4 bg-gray-100 dark:bg-neutral-800 ">
               <h2 className="text-xl font-bold mb-4 dark:text-white">目次</h2>
               <nav className="space-y-2">
                 {toc.map((item, index) => (

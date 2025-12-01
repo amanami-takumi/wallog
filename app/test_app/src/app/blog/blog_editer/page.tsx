@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import EditorToolbar, { MarkdownSyntax } from './components/EditorToolbar';
 import EditorTextarea from './components/EditorTextarea';
 import BlogSelector from './components/BlogSelector';
@@ -11,6 +11,8 @@ import EditorSettings from './components/EditorSettings';
 import { useEditor } from './context/EditorContext';
 import useEditorHistory from './hooks/useEditorHistory';
 import styles from './BlogEditor.module.css';
+import ScheduleModal from './components/ScheduleModal';
+import { BlogFormData, BlogScheduleItem } from './types';
 
 /**
  * ブログエディターページコンポーネント
@@ -22,12 +24,13 @@ export default function BlogEditorPage() {
   const { settings } = useEditor();
   
   // 基本データ
-  const [blogData, setBlogData] = useState({
+  const [blogData, setBlogData] = useState<BlogFormData>({
     blog_id: '',
     blog_title: '',
     blog_text: '',
     blog_thumbnail: '',
-    blog_tags: [] as string[],
+    blog_tags: [],
+    blog_schedule_at: '',
   });
   
   // UI状態
@@ -36,7 +39,16 @@ export default function BlogEditorPage() {
   const [mode, setMode] = useState<'create' | 'edit'>('create');
   const [showPreview, setShowPreview] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [isScheduleMode, setIsScheduleMode] = useState(false);
   
+  const formattedSchedule = useMemo(() => {
+    if (!blogData.blog_schedule_at) return '';
+    const date = new Date(blogData.blog_schedule_at);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString();
+  }, [blogData.blog_schedule_at]);
+
   // 履歴管理
   const {
     history,
@@ -117,16 +129,36 @@ export default function BlogEditorPage() {
         blog_text: data.blog_text || '',
         blog_thumbnail: data.blog_thumbnail || '',
         blog_tags: data.blog_tags || [],
+        blog_schedule_at: data.blog_schedule_at || '',
       });
       
       resetHistory(data.blog_text || '');
       setMode('edit');
+      setIsScheduleMode(false);
     } catch (error) {
       console.error('ブログのロードエラー:', error);
       setError((error as Error).message);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  /**
+   * 予約投稿の編集を開始
+   */
+  const handleSelectScheduleForEdit = (schedule: BlogScheduleItem) => {
+    setBlogData({
+      blog_id: schedule.blog_schedule_id || '',
+      blog_title: schedule.blog_title || '',
+      blog_text: schedule.blog_text || '',
+      blog_thumbnail: schedule.blog_thumbnail || '',
+      blog_tags: Array.isArray(schedule.blog_tags) ? schedule.blog_tags : [],
+      blog_schedule_at: schedule.blog_schedule_at || '',
+    });
+    resetHistory(schedule.blog_text || '');
+    setMode('edit');
+    setIsScheduleMode(true);
+    setShowSchedule(false);
   };
 
   /**
@@ -330,9 +362,11 @@ export default function BlogEditorPage() {
         blog_text: '',
         blog_thumbnail: '',
         blog_tags: [],
+        blog_schedule_at: '',
       });
       resetHistory('');
       setMode('create');
+      setIsScheduleMode(false);
     }
   };
 
@@ -346,9 +380,11 @@ export default function BlogEditorPage() {
       blog_text: '',
       blog_thumbnail: '',
       blog_tags: [],
+      blog_schedule_at: '',
     });
     resetHistory('');
     setMode('create');
+    setIsScheduleMode(false);
   };
 
   /**
@@ -360,6 +396,11 @@ export default function BlogEditorPage() {
     setError(null);
     
     try {
+      const payload = {
+        ...blogData,
+        blog_schedule_at: blogData.blog_schedule_at || '',
+      };
+
       const endpoint = mode === 'create' 
         ? '/api/blog/blog_create' 
         : `/api/blog/blog_update/${blogData.blog_id}`;
@@ -370,7 +411,7 @@ export default function BlogEditorPage() {
         method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(blogData),
+        body: JSON.stringify(payload),
       });
       
       if (!response.ok) {
@@ -384,7 +425,11 @@ export default function BlogEditorPage() {
         localStorage.removeItem('blog_draft');
         window.location.href = `/blog/blog_editer?id=${result.blog_id}`;
       } else {
-        alert('ブログを更新しました');
+        if (isScheduleMode) {
+          alert('予約投稿を更新しました');
+        } else {
+          alert('ブログを更新しました');
+        }
       }
     } catch (error) {
       console.error('保存エラー:', error);
@@ -400,7 +445,11 @@ export default function BlogEditorPage() {
   const handleDelete = async () => {
     if (!blogData.blog_id) return;
     
-    if (!window.confirm('本当にこのブログ記事を削除しますか？この操作は取り消せません。')) {
+    const confirmMessage = isScheduleMode
+      ? 'この予約投稿を削除しますか？'
+      : '本当にこのブログ記事を削除しますか？この操作は取り消せません。';
+
+    if (!window.confirm(confirmMessage)) {
       return;
     }
     
@@ -416,11 +465,16 @@ export default function BlogEditorPage() {
       });
       
       if (!response.ok) {
-        throw new Error('ブログの削除に失敗しました');
+        throw new Error(isScheduleMode ? '予約投稿の削除に失敗しました' : 'ブログの削除に失敗しました');
       }
       
-      // 削除成功後はブログ一覧ページへ
-      window.location.href = '/blog';
+      if (isScheduleMode) {
+        alert('予約投稿を削除しました');
+        handleCreateNew();
+      } else {
+        // 削除成功後はブログ一覧ページへ
+        window.location.href = '/blog';
+      }
     } catch (error) {
       console.error('削除エラー:', error);
       setError((error as Error).message);
@@ -432,10 +486,17 @@ export default function BlogEditorPage() {
   return (
     <div className="container mx-auto px-4 py-6 md:px-6 mb-20">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">
-          {mode === 'create' ? 'ブログ新規作成' : 'ブログ編集'}
-        </h1>
-        
+        <div className="flex items-center space-x-3">
+          <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">
+            {mode === 'create' ? 'ブログ新規作成' : 'ブログ編集'}
+          </h1>
+          {isScheduleMode && mode === 'edit' && (
+            <span className="px-3 py-1 text-sm rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">
+              予約投稿編集中
+            </span>
+          )}
+        </div>
+
         <div className="flex space-x-2">
           <button
             type="button"
@@ -448,6 +509,18 @@ export default function BlogEditorPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             設定
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowSchedule(true)}
+            className="px-4 py-2 bg-purple-100 border border-purple-200 text-purple-700 rounded-md hover:bg-purple-200 dark:bg-purple-900 dark:border-purple-700 dark:text-purple-200 dark:hover:bg-purple-800 flex items-center transition-colors"
+          >
+            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6a9 9 0 110 12 9 9 0 010-12z" />
+            </svg>
+            予約
           </button>
           
           <button
@@ -568,33 +641,52 @@ export default function BlogEditorPage() {
             )}
           </div>
           
-          <div className="space-x-2">
-            <button
-              type="button"
-              onClick={() => window.history.back()}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-500"
-              disabled={isLoading}
-            >
-              キャンセル
-            </button>
-            
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isLoading}
-            >
-              {isLoading
-                ? '保存中...'
-                : mode === 'create'
-                  ? '作成する'
-                  : '更新する'}
-            </button>
+          <div className="flex flex-col items-end space-y-2">
+            {formattedSchedule && (
+              <p className="text-sm text-purple-600 dark:text-purple-300">
+                予約日時: {formattedSchedule}
+              </p>
+            )}
+            <div className="flex space-x-2">
+              <button
+                type="button"
+                onClick={() => window.history.back()}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-500"
+                disabled={isLoading}
+              >
+                キャンセル
+              </button>
+              
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isLoading}
+              >
+                {isLoading
+                  ? '保存中...'
+                  : mode === 'create'
+                    ? '作成する'
+                    : '更新する'}
+              </button>
+            </div>
           </div>
         </div>
       </form>
       
       {/* 設定モーダル */}
       {showSettings && <EditorSettings onClose={() => setShowSettings(false)} />}
+
+      {/* 予約モーダル */}
+      {showSchedule && (
+        <ScheduleModal
+          onClose={() => setShowSchedule(false)}
+          blogData={blogData}
+          setBlogData={setBlogData}
+          onSelectScheduleForEdit={handleSelectScheduleForEdit}
+          isScheduleMode={isScheduleMode}
+          onClearScheduleMode={() => setIsScheduleMode(false)}
+        />
+      )}
     </div>
   );
 }

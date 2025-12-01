@@ -72,7 +72,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageInsert }) => {
     
     try {
       // APIエンドポイントへのアップロード
-      const response = await fetch('/api/drive/file_upload', {
+      const response = await fetch('/api/drive/file_create', {
         method: 'POST',
         body: formData,
         // アップロードの進捗をモニタリングする場合はここにXMLHttpRequestを使用
